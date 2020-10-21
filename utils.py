@@ -130,19 +130,19 @@ def get_average_points_per_position(position, players, topn, plot_output=False, 
     
     return np.array(y), np.array(e_season)
 
-def closestNRanks(player, players, year_to_predict, nRanks = 5, topn=50):
+def closestNRanks(player, players, year_to_predict, nRanks = 5, topn=50, print_output=False):
     if not players[player].playedInYear(year_to_predict - 1):
         return -1
     mean_points, standard_devations = get_average_points_per_position(players[player].player_position, players, topn, plot_output=False, print_output=False)
     meanPlayer = players[player].get_total_score_for_year(year_to_predict - 1)
     stdPlayer = players[player].get_stddev_for_year(year_to_predict - 1)
-    print(f"{player}'s season distribution: ")
-    print("Total Season Score: " + str(meanPlayer))
-    print("Standard Deviation: " + str(stdPlayer))
-    print("Closest Ranks: ")
+    if print_output:
+        print(f"{player}'s season distribution: ")
+        print("Total Season Score: " + str(meanPlayer))
+        print("Standard Deviation: " + str(stdPlayer))
+        print("Closest Ranks: ")
     dists = nsmallest(nRanks, [(abs(mean_points[i] - meanPlayer), i) for i in range(len(mean_points))])
-    for rank in dists:
-        print(players[player].player_position + str(rank[1] + 1))
+    return [rank[1] + 1 for rank in dists]
 
 
 def load_data(filepath, start_year = 2000, end_year = 2019):  
@@ -173,4 +173,4 @@ if __name__ == "__main__":
     players = load_data("data_save/players_data.p")
     #mean_points, standard_devations = get_average_points_per_position("WR", players, 30, plot_output=False, print_output=True)
     for player in players:
-        closestNRanks(player, players, 2019, nRanks=1)
+        print(closestNRanks(player, players, 2019, nRanks=1))

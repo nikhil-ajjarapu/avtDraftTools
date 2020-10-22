@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # global variables - if you edit these, you need to delete players_data.p and let program regenerate
-global_start_year = 2000
+global_start_year = 1999
 global_end_year = 2019
 
 class Player:
@@ -15,6 +15,9 @@ class Player:
         self.player_name = player_name
         self.player_position = player_position
         self.scores = dict() # maps year -> (week, score that week)
+        self.targets = dict() # maps year -> (week, targets that week)
+        self.rush_attempts = dict() # maps year -> (week, rush attempts that week)
+        self.pass_attempts = dict() # maps year -> (week, pass attempts that week)
 
     def playedInYear(self, year):
         return year in self.scores
@@ -25,11 +28,54 @@ class Player:
         
         self.scores[year].append((week, score))
     
+    def add_targets(self, year, week, targets):
+        if week not in range(1, 17):
+            return -1
+        if year not in self.targets:
+            self.targets[year] = []
+
+        self.targets[year].append((week, targets))
+    
+    def add_rush_attempts(self, year, week, rush_attempts):
+        if week not in range(1, 17):
+            return -1
+        if year not in self.rush_attempts:
+            self.rush_attempts[year] = []
+
+        self.rush_attempts[year].append((week, rush_attempts))
+    
+    def add_pass_attempts(self, year, week, pass_attempts):
+        if week not in range(1, 17):
+            return -1
+        if year not in self.pass_attempts:
+            self.pass_attempts[year] = []
+
+        self.pass_attempts[year].append((week, pass_attempts))
+    
     def get_score(self, year, week):
         if year not in self.scores or week not in range(1, 17):
             return -1
         
         return [tup[1] for tup in self.scores[year] if tup[0] == week][0]
+    
+    def get_total_rush_attempts_for_year(self, year):
+        if year not in self.rush_attempts or week not in range(1, 17):
+            return -1
+        
+        return np.sum(self.rush_attempts[year], axis=0)[-1]
+
+    def get_total_targets_for_year(self, year):
+        if year not in self.targets or week not in range(1, 17):
+            return -1
+        
+        return np.sum(self.targets[year], axis=0)[-1]
+
+    def get_total_pass_attempts_for_year(self, year):
+        if year not in self.pass_attempts or week not in range(1, 17):
+            return -1
+        
+        return np.sum(self.pass_attempts[year], axis=0)[-1]
+
     def get_mean_score_for_year(self, year):
         if year not in self.scores or len(self.scores[year]) == 0: 
             return -1
@@ -144,6 +190,41 @@ def closestNRanks(player, players, year_to_predict, nRanks = 5, topn=50, print_o
     dists = nsmallest(nRanks, [(abs(mean_points[i] - meanPlayer), i) for i in range(len(mean_points))])
     return [rank[1] + 1 for rank in dists]
 
+def _createDataset(mean_points, players, position, year, nRanks, print_output=False):
+    #check correlation by iterating through year
+    if len(mean_points) < nRanks:
+        return -1
+
+    total_scores_for_year = [(players[player].get_total_score_for_year(year), player, year) for player in players if players[player].player_position == position]
+    top_n_pos = nlargest(nRanks, total_scores_for_year)
+    X = np.zeros(len(top_n_pos), dtype=int)
+    y = np.zeros(len(top_n_pos), dtype=float)
+    mean_squared_error = 0
+    for i in range(len(top_n_pos)):
+        mean_squared_error += (top_n_pos[i][0] - mean_points[i])**2
+        X[i] = i + 1
+        y[i] = top_n_pos[i][0]
+    if print_output:
+        print(f"Mean Squared Error (MSE) for {year}: {mean_squared_error}")
+        print(f"Root Mean Squared Error (RMSE) for {year}: {mean_squared_error ** 0.5}")
+
+    return X, y
+
+def generateTotalDataset(mean_points, players, position, nRanks, print_output=False, plot_output=False):
+    all_data_x = np.array([])
+    all_data_y = np.array([])
+    for year in range(global_start_year, global_end_year):
+        tempX, tempy = _createDataset(mean_points, players, "QB", year, nRanks, print_output=print_output)
+        if all_data_x.shape[0] == 0:
+            all_data_x = tempX.copy()
+            all_data_y = tempy.copy()
+        else:
+            all_data_x = np.concatenate((all_data_x, tempX))
+            all_data_y = np.concatenate((all_data_y, tempy))
+    if plot_output:
+        plt.scatter(all_data_x, all_data_y)
+        plt.show()
+    return all_data_x, all_data_y
 
 def load_data(filepath, start_year = 2000, end_year = 2019):  
     global_start_year = start_year
@@ -164,13 +245,20 @@ def load_data(filepath, start_year = 2000, end_year = 2019):
                     if player['player_name'] not in players:
                         players[player['player_name']] = Player(player['player_name'], player['position'])
                     players[player['player_name']].add_score(year, week, player['fantasy_points']['half_ppr'])
+                    players[player['player_name']].add_targets(year, week, player['stats']['receiving']['targets'])
+                    players[player['player_name']].add_pass_attempts(year, week, player['stats']['passing']['passing_att'])
+                    players[player['player_name']].add_rush_attempts(year, week, player['stats']['rushing']['rushing_att'])
             print(f"Finished with year {year}!")
         dump(players, open(filepath, "wb"))
     print("Data loaded!")
     return players
 
 if __name__ == "__main__":
-    players = load_data("data_save/players_data.p")
-    #mean_points, standard_devations = get_average_points_per_position("WR", players, 30, plot_output=False, print_output=True)
-    for player in players:
-        print(closestNRanks(player, players, 2019, nRanks=1))
+    players = load_data("data_save/players_data.p", start_year=1999, end_year=2019)
+    nRanks = 30
+    position = "QB"
+    mean_points, standard_devations = get_average_points_per_position(position, players, nRanks, plot_output=False, print_output=False)
+    X, y = generateTotalDataset(mean_points, players, position, nRanks)
+
+    
+            

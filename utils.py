@@ -191,7 +191,6 @@ def closestNRanks(player, players, year_to_predict, nRanks = 5, topn=50, print_o
     return [rank[1] + 1 for rank in dists]
 
 def _createDataset(mean_points, players, position, year, nRanks, print_output=False):
-    #check correlation by iterating through year
     if len(mean_points) < nRanks:
         return -1
 
@@ -240,7 +239,7 @@ def load_data(filepath, start_year = 2000, end_year = 2019):
         for year in range(global_start_year, global_end_year):
             for week in range(1, 18): 
                 json_resp = requests.get(f"https://www.fantasyfootballdatapros.com/api/players/{year}/{week}").json()
-                # currently only extracting fantasy scores - TODO for future: store targets, etc
+                # currently only extracting fantasy scores
                 for player in json_resp:
                     if player['player_name'] not in players:
                         players[player['player_name']] = Player(player['player_name'], player['position'])
@@ -259,6 +258,5 @@ if __name__ == "__main__":
     position = "QB"
     mean_points, standard_devations = get_average_points_per_position(position, players, nRanks, plot_output=False, print_output=False)
     X, y = generateTotalDataset(mean_points, players, position, nRanks)
-
     
             
